@@ -1,0 +1,124 @@
+# package.json bump on main → v* tag + draft GitHub Release → npm publish (same run).
+
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'package.json'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.repository.fork }}
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
+      did_push: ${{ steps.sync.outputs.did_push }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Read version from package.json
+        id: ver
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::Empty version in package.json"
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Using tag ${TAG} for commit ${GITHUB_SHA}"
+
+      - name: Ensure tag at ${{ github.sha }}
+        id: sync
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          git fetch origin --tags --force
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            EXISTING="$(git rev-parse "$TAG^{}")"
+            if [[ "$EXISTING" != "$GITHUB_SHA" ]]; then
+              echo "::error::Tag ${TAG} already exists at ${EXISTING}, but this workflow is for ${GITHUB_SHA}. Bump package.json to a new version."
+              exit 1
+            fi
+            echo "Tag ${TAG} already points at this commit."
+            echo "did_push=false" >> "$GITHUB_OUTPUT"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "${TAG}" -m "Release ${TAG}" "${GITHUB_SHA}"
+            git push origin "refs/tags/${TAG}"
+            echo "did_push=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Draft GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping."
+          else
+            gh release create "$TAG" --draft --verify-tag \
+              --title "$TAG" \
+              --generate-notes
+          fi
+
+  npm:
+    needs: tag
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.repository.fork && needs.tag.outputs.did_push == 'true' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Verify GitHub release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: gh release view "$TAG"
+
+      - name: Checkout tag
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          registry-url: 'https://registry.npmjs.org'
+          cache: yarn
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Typecheck
+        run: yarn typecheck
+
+      - name: Test
+        run: yarn test --maxWorkers=2
+
+      - name: Build package (bob)
+        run: yarn prepare
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
