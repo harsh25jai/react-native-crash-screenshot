@@ -12,7 +12,7 @@ npm install react-native-crash-screenshot
 
 ## Usage
 
-Call `initializeCrashScreenshot()` once when your app starts (for example inside `useEffect` on the root component). On Android and iOS, uncaught native crashes capture the current window to JPEG files under `crash_screenshots` in the app sandbox. JavaScript errors are forwarded to native before the existing React Native handler runs.
+Call `initializeCrashScreenshot()` once when your app starts (for example inside `useEffect` on the root component). On Android and iOS, uncaught native crashes capture the current window to JPEG files under `crash_screenshots` in the app sandbox. **Fatal** JavaScript errors are forwarded to native before the existing React Native handler runs so a screenshot can be attempted.
 
 ```tsx
 import { useEffect } from 'react';
