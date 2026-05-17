@@ -1,4 +1,6 @@
 # package.json bump on main → v* tag + draft GitHub Release → npm publish (same run).
+# npm job runs after a new tag, or retries when the tag already exists but that version
+# is not on the registry yet.
 
 name: Release
 
@@ -23,6 +25,7 @@ jobs:
     outputs:
       tag: ${{ steps.ver.outputs.tag }}
       did_push: ${{ steps.sync.outputs.did_push }}
+      publish: ${{ steps.gate.outputs.publish }}
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -77,10 +80,30 @@ jobs:
               --generate-notes
           fi
 
+      - name: Decide whether to run npm publish
+        id: gate
+        env:
+          DID_PUSH: ${{ steps.sync.outputs.did_push }}
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$DID_PUSH" == "true" ]]; then
+            echo "New tag pushed; will run npm job."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if npm view "${NAME}@${VERSION}" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
+            echo "npm already has ${NAME}@${VERSION}; skipping npm job."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "npm does not have ${NAME}@${VERSION} yet; will run npm job (retry)."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
   npm:
     needs: tag
     runs-on: ubuntu-latest
-    if: ${{ !github.event.repository.fork && needs.tag.outputs.did_push == 'true' }}
+    if: ${{ !github.event.repository.fork && needs.tag.outputs.publish == 'true' }}
     permissions:
       contents: read
     steps:
