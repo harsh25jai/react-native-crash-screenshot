@@ -1,6 +1,5 @@
-# package.json bump on main → v* tag + draft GitHub Release → npm publish (same run).
-# npm job runs after a new tag, or retries when the tag already exists but that version
-# is not on the registry yet.
+# package.json on main → ensure v* tag → draft GitHub Release → npm publish.
+# Each step is idempotent: existing tag / release / npm version → skip that piece only.
 
 name: Release
 
@@ -24,6 +23,8 @@ jobs:
       contents: write
     outputs:
       tag: ${{ steps.ver.outputs.tag }}
+      name: ${{ steps.ver.outputs.name }}
+      version: ${{ steps.ver.outputs.version }}
       did_push: ${{ steps.sync.outputs.did_push }}
       publish: ${{ steps.gate.outputs.publish }}
     steps:
@@ -32,18 +33,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Read version from package.json
+      - name: Read package.json
         id: ver
         run: |
           VERSION="$(node -p "require('./package.json').version")"
+          NAME="$(node -p "require('./package.json').name")"
           if [[ -z "$VERSION" ]]; then
             echo "::error::Empty version in package.json"
             exit 1
           fi
           TAG="v${VERSION}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Using tag ${TAG} for commit ${GITHUB_SHA}"
+          echo "Using ${NAME} ${TAG} at ${GITHUB_SHA}"
 
       - name: Ensure tag at ${{ github.sha }}
         id: sync
@@ -54,16 +57,17 @@ jobs:
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             EXISTING="$(git rev-parse "$TAG^{}")"
             if [[ "$EXISTING" != "$GITHUB_SHA" ]]; then
-              echo "::error::Tag ${TAG} already exists at ${EXISTING}, but this workflow is for ${GITHUB_SHA}. Bump package.json to a new version."
+              echo "::error::Tag ${TAG} points at ${EXISTING}; this commit is ${GITHUB_SHA}. Bump package.json version and merge again, or delete remote tag ${TAG} only if it was never published and you accept rewriting history."
               exit 1
             fi
-            echo "Tag ${TAG} already points at this commit."
+            echo "Remote tag ${TAG} already at this commit — skipping tag create/push."
             echo "did_push=false" >> "$GITHUB_OUTPUT"
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git tag -a "${TAG}" -m "Release ${TAG}" "${GITHUB_SHA}"
             git push origin "refs/tags/${TAG}"
+            echo "Pushed new tag ${TAG}."
             echo "did_push=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -71,55 +75,84 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.ver.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists, skipping."
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "GitHub release ${TAG} already exists — skipping create."
           else
-            gh release create "$TAG" --draft --verify-tag \
+            echo "Creating draft GitHub release ${TAG}."
+            gh release create "$TAG" --draft --verify-tag --repo "$REPO" \
               --title "$TAG" \
               --generate-notes
           fi
 
-      - name: Decide whether to run npm publish
+      - name: Decide whether to run npm job
         id: gate
         env:
           DID_PUSH: ${{ steps.sync.outputs.did_push }}
         run: |
           NAME="$(node -p "require('./package.json').name")"
           VERSION="$(node -p "require('./package.json').version")"
+          REGISTRY="https://registry.npmjs.org/"
+          if npm view "${NAME}@${VERSION}" version --registry="$REGISTRY" >/dev/null 2>&1; then
+            echo "${NAME}@${VERSION} already on npm — skipping npm job (no checkout/tests/publish)."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [[ "$DID_PUSH" == "true" ]]; then
-            echo "New tag pushed; will run npm job."
+            echo "New tag and version not on npm yet — will run npm job."
             echo "publish=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if npm view "${NAME}@${VERSION}" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
-            echo "npm already has ${NAME}@${VERSION}; skipping npm job."
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "npm does not have ${NAME}@${VERSION} yet; will run npm job (retry)."
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          fi
+          echo "Version not on npm (retry) — will run npm job."
+          echo "publish=true" >> "$GITHUB_OUTPUT"
 
   npm:
     needs: tag
     runs-on: ubuntu-latest
     if: ${{ !github.event.repository.fork && needs.tag.outputs.publish == 'true' }}
     permissions:
-      contents: read
+      contents: write
     steps:
-      - name: Verify GitHub release exists
+      - name: Ensure GitHub release exists
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.tag.outputs.tag }}
-        run: gh release view "$TAG" --repo "${{ github.repository }}"
+          REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "GitHub release ${TAG} exists — skipping create."
+          else
+            echo "Creating draft GitHub release ${TAG}."
+            gh release create "$TAG" --draft --verify-tag --repo "$REPO" \
+              --title "$TAG" \
+              --generate-notes
+          fi
+
+      - name: Check npm registry
+        id: reg
+        env:
+          NAME: ${{ needs.tag.outputs.name }}
+          VERSION: ${{ needs.tag.outputs.version }}
+        run: |
+          REGISTRY="https://registry.npmjs.org/"
+          if npm view "${NAME}@${VERSION}" version --registry="$REGISTRY" >/dev/null 2>&1; then
+            echo "${NAME}@${VERSION} already on npm — skipping checkout, tests, and publish."
+            echo "on_npm=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version not on registry — will checkout, test, build, publish."
+            echo "on_npm=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Checkout tag
+        if: ${{ steps.reg.outputs.on_npm != 'true' }}
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           ref: ${{ needs.tag.outputs.tag }}
           fetch-depth: 0
 
       - name: Setup Node.js
+        if: ${{ steps.reg.outputs.on_npm != 'true' }}
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
@@ -127,21 +160,35 @@ jobs:
           cache: yarn
 
       - name: Enable Corepack
+        if: ${{ steps.reg.outputs.on_npm != 'true' }}
         run: corepack enable
 
       - name: Install dependencies
+        if: ${{ steps.reg.outputs.on_npm != 'true' }}
         run: yarn install --immutable
 
       - name: Typecheck
+        if: ${{ steps.reg.outputs.on_npm != 'true' }}
         run: yarn typecheck
 
       - name: Test
+        if: ${{ steps.reg.outputs.on_npm != 'true' }}
         run: yarn test --maxWorkers=2
 
       - name: Build package (bob)
+        if: ${{ steps.reg.outputs.on_npm != 'true' }}
         run: yarn prepare
 
       - name: Publish to npm
+        if: ${{ steps.reg.outputs.on_npm != 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          VERSION="$(node -p "require('./package.json').version")"
+          REGISTRY="https://registry.npmjs.org/"
+          if npm view "${NAME}@${VERSION}" version --registry="$REGISTRY" >/dev/null 2>&1; then
+            echo "${NAME}@${VERSION} appeared on npm before publish — skipping npm publish."
+            exit 0
+          fi
+          npm publish --access public
