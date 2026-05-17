@@ -38,7 +38,6 @@ internal object CrashScreenshotHandler {
     if (initialized) return
     synchronized(this) {
       if (initialized) return
-      initialized = true
       application.registerActivityLifecycleCallbacks(
           object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
@@ -55,7 +54,11 @@ internal object CrashScreenshotHandler {
 
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
 
-            override fun onActivityDestroyed(activity: Activity) {}
+            override fun onActivityDestroyed(activity: Activity) {
+              if (currentActivity?.get() === activity) {
+                currentActivity = null
+              }
+            }
           })
 
       chainHandler = Thread.getDefaultUncaughtExceptionHandler()
@@ -65,6 +68,7 @@ internal object CrashScreenshotHandler {
         } catch (_: Throwable) {}
         chainHandler?.uncaughtException(thread, throwable)
       }
+      initialized = true
     }
   }
 
