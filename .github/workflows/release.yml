@@ -88,7 +88,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.tag.outputs.tag }}
-        run: gh release view "$TAG"
+        run: gh release view "$TAG" --repo "${{ github.repository }}"
 
       - name: Checkout tag
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
