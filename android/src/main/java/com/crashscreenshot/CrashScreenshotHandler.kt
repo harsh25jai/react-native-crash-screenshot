@@ -27,13 +27,13 @@ internal object CrashScreenshotHandler {
 
   @Volatile private var chainHandler: Thread.UncaughtExceptionHandler? = null
 
-  @Volatile private var installed = false
+  @Volatile private var initialized = false
 
   fun install(application: Application) {
-    if (installed) return
+    if (initialized) return
     synchronized(this) {
-      if (installed) return
-      installed = true
+      if (initialized) return
+      initialized = true
       application.registerActivityLifecycleCallbacks(
           object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}

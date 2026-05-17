@@ -49,7 +49,7 @@ describe('initializeCrashScreenshot', () => {
     expect(NativeCrashScreenshot.install).toHaveBeenCalledTimes(1);
   });
 
-  it('does not call native install again on second install', () => {
+  it('does not call native install again on second initializeCrashScreenshot', () => {
     initializeCrashScreenshot();
     expect(NativeCrashScreenshot.install).toHaveBeenCalledTimes(1);
   });
@@ -75,6 +75,16 @@ describe('initializeCrashScreenshot', () => {
 
     expect(NativeCrashScreenshot.notifyJsException).toHaveBeenCalledWith('plain', '');
     expect(previousHandler).toHaveBeenCalledWith('plain', false);
+  });
+
+  it('still invokes previous handler if notifyJsException throws', () => {
+    const err = new Error('boom');
+    jest.mocked(NativeCrashScreenshot.notifyJsException).mockImplementationOnce(() => {
+      throw new Error('notify failed');
+    });
+
+    expect(() => capturedHandler(err, true)).toThrow('notify failed');
+    expect(previousHandler).toHaveBeenCalledWith(err, true);
   });
 });
 
