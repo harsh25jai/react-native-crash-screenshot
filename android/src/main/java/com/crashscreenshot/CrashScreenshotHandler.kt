@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
 import android.view.PixelCopy
@@ -22,6 +23,10 @@ internal object CrashScreenshotHandler {
   private const val TAG = "CrashScreenshot"
 
   private val mainHandler = Handler(Looper.getMainLooper())
+
+  private val pixelCopyThread: HandlerThread =
+      HandlerThread("CrashScreenshot-PixelCopy").apply { start() }
+  private val pixelCopyHandler = Handler(pixelCopyThread.looper)
 
   @Volatile private var currentActivity: WeakReference<Activity>? = null
 
@@ -83,43 +88,50 @@ internal object CrashScreenshotHandler {
 
   private fun saveScreenshotSync(label: String) {
     val latch = CountDownLatch(1)
-    mainHandler.post {
-      try {
-        val activity = currentActivity?.get()
-        val window = activity?.window
-        val view = window?.decorView
-        if (activity == null || window == null || view == null || view.width <= 0 || view.height <= 0) {
-          latch.countDown()
-          return@post
-        }
-        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        val rect = Rect(0, 0, view.width, view.height)
-        PixelCopy.request(
-            window,
-            rect,
-            bitmap,
-            { copyResult: Int ->
-              try {
-                if (copyResult == PixelCopy.SUCCESS) {
-                  persistBitmap(activity, bitmap, label)
-                  Log.i(TAG, "Saved crash screenshot ($label)")
-                }
-              } catch (e: Throwable) {
-                Log.e(TAG, "Failed persisting screenshot", e)
-              } finally {
-                if (!bitmap.isRecycled) {
-                  bitmap.recycle()
-                }
-                latch.countDown()
-              }
-            },
-            mainHandler)
-      } catch (e: Throwable) {
-        Log.e(TAG, "PixelCopy request failed", e)
-        latch.countDown()
-      }
+    val captureWork = Runnable { runMainThreadPixelCopy(label, latch) }
+    if (Looper.myLooper() == Looper.getMainLooper()) {
+      captureWork.run()
+    } else {
+      mainHandler.post(captureWork)
     }
     latch.await(3, TimeUnit.SECONDS)
+  }
+
+  private fun runMainThreadPixelCopy(label: String, latch: CountDownLatch) {
+    try {
+      val activity = currentActivity?.get()
+      val window = activity?.window
+      val view = window?.decorView
+      if (activity == null || window == null || view == null || view.width <= 0 || view.height <= 0) {
+        latch.countDown()
+        return
+      }
+      val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+      val rect = Rect(0, 0, view.width, view.height)
+      PixelCopy.request(
+          window,
+          rect,
+          bitmap,
+          { copyResult: Int ->
+            try {
+              if (copyResult == PixelCopy.SUCCESS) {
+                persistBitmap(activity, bitmap, label)
+                Log.i(TAG, "Saved crash screenshot ($label)")
+              }
+            } catch (e: Throwable) {
+              Log.e(TAG, "Failed persisting screenshot", e)
+            } finally {
+              if (!bitmap.isRecycled) {
+                bitmap.recycle()
+              }
+              latch.countDown()
+            }
+          },
+          pixelCopyHandler)
+    } catch (e: Throwable) {
+      Log.e(TAG, "PixelCopy request failed", e)
+      latch.countDown()
+    }
   }
 
   private fun persistBitmap(activity: Activity, bitmap: Bitmap, label: String) {

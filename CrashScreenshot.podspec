@@ -8,7 +8,9 @@ Pod::Spec.new do |s|
   s.summary      = package["description"]
   s.homepage     = package["homepage"]
   s.license      = package["license"]
-  s.authors      = package["author"]
+  s.authors = {
+    "Contributors" => package["homepage"]
+  }
 
   s.platforms    = { :ios => min_ios_version_supported }
   s.source       = { :git => ".git", :tag => "#{s.version}" }
@@ -16,5 +18,7 @@ Pod::Spec.new do |s|
   s.source_files = "ios/**/*.{h,m,mm,swift,cpp}"
   s.private_header_files = "ios/**/*.h"
 
-  install_modules_dependencies(s)
+  if respond_to?(:install_modules_dependencies, true)
+    install_modules_dependencies(s)
+  end
 end

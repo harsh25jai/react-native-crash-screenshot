@@ -44,14 +44,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+.git"
+    "url": "https://github.com/harsh25jai/react-native-crash-screenshot.git"
   },
-  "author": " <> ()",
+  "author": "react-native-crash-screenshot contributors (https://github.com/harsh25jai/react-native-crash-screenshot)",
   "license": "MIT",
   "bugs": {
-    "url": "/issues"
+    "url": "https://github.com/harsh25jai/react-native-crash-screenshot/issues"
   },
-  "homepage": "#readme",
+  "homepage": "https://github.com/harsh25jai/react-native-crash-screenshot#readme",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },

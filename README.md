@@ -16,15 +16,18 @@ Call `initializeCrashScreenshot()` once when your app starts (for example inside
 
 ```tsx
 import { useEffect } from 'react';
-import { initializeCrashScreenshot, NativeCrashScreenshot } from 'react-native-crash-screenshot';
+import { initializeCrashScreenshot } from 'react-native-crash-screenshot';
 
 export default function App() {
   useEffect(() => {
     initializeCrashScreenshot();
   }, []);
 
-  // NativeCrashScreenshot.triggerTestNativeCrash(); // test only
+  return null;
 }
+
+// Native crash test (optional): import { NativeCrashScreenshot } from 'react-native-crash-screenshot';
+// then call NativeCrashScreenshot.triggerTestNativeCrash();
 ```
 
 

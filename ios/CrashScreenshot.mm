@@ -88,14 +88,23 @@ static void RNCSSPersist(UIImage *image, NSString *label) {
 }
 
 static void RNCSSCapture(NSString *label) {
-  dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-  dispatch_async(dispatch_get_main_queue(), ^{
+  void (^work)(void) = ^{
     @autoreleasepool {
       UIImage *img = RNCSSSnapshot();
       if (img != nil) {
         RNCSSPersist(img, label);
       }
     }
+  };
+
+  if ([NSThread isMainThread]) {
+    work();
+    return;
+  }
+
+  dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+  dispatch_async(dispatch_get_main_queue(), ^{
+    work();
     dispatch_semaphore_signal(sem);
   });
   dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)));

@@ -20,7 +20,7 @@ class CrashScreenshotPackage : BaseReactPackage() {
     mapOf(
       CrashScreenshotModule.NAME to ReactModuleInfo(
         name = CrashScreenshotModule.NAME,
-        className = CrashScreenshotModule.NAME,
+        className = CrashScreenshotModule::class.java.name,
         canOverrideExistingModule = false,
         needsEagerInit = false,
         isCxxModule = false,
