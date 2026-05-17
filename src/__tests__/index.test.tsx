@@ -59,7 +59,7 @@ describe('initializeCrashScreenshot', () => {
     expect(capturedHandler).toEqual(expect.any(Function));
   });
 
-  it('forwards JS errors to native then previous handler', () => {
+  it('forwards fatal JS errors to native then previous handler', () => {
     const err = new Error('boom');
     capturedHandler(err, true);
 
@@ -70,10 +70,18 @@ describe('initializeCrashScreenshot', () => {
     expect(previousHandler).toHaveBeenCalledWith(err, true);
   });
 
+  it('does not forward non-fatal JS errors to native', () => {
+    const err = new Error('soft');
+    capturedHandler(err, false);
+
+    expect(NativeCrashScreenshot.notifyJsException).not.toHaveBeenCalled();
+    expect(previousHandler).toHaveBeenCalledWith(err, false);
+  });
+
   it('handles non-Error values in global handler', () => {
     capturedHandler('plain', false);
 
-    expect(NativeCrashScreenshot.notifyJsException).toHaveBeenCalledWith('plain', '');
+    expect(NativeCrashScreenshot.notifyJsException).not.toHaveBeenCalled();
     expect(previousHandler).toHaveBeenCalledWith('plain', false);
   });
 

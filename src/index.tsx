@@ -20,9 +20,11 @@ export function initializeCrashScreenshot(): void {
   const previousHandler = ErrorUtils.getGlobalHandler();
   ErrorUtils.setGlobalHandler((error: unknown, isFatal: boolean) => {
     try {
-      const message = error instanceof Error ? error.message : String(error);
-      const stack = error instanceof Error ? (error.stack ?? '') : '';
-      NativeCrashScreenshot.notifyJsException(message, stack);
+      if (isFatal) {
+        const message = error instanceof Error ? error.message : String(error);
+        const stack = error instanceof Error ? (error.stack ?? '') : '';
+        NativeCrashScreenshot.notifyJsException(message, stack);
+      }
     } finally {
       previousHandler(error, isFatal);
     }
