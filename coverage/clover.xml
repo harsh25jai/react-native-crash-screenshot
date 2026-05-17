@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1779001584012" clover="3.2.0">
+  <project timestamp="1779001584012" name="All files">
+    <metrics statements="11" coveredstatements="11" conditionals="8" coveredconditionals="7" methods="2" coveredmethods="2" elements="21" coveredelements="20" complexity="0" loc="11" ncloc="11" packages="1" files="1" classes="1"/>
+    <file name="index.tsx" path="/Users/hj519780/Desktop/Projects/ME/mynpmlibs/react-native-crash-screenshot/src/index.tsx">
+      <metrics statements="11" coveredstatements="11" conditionals="8" coveredconditionals="7" methods="2" coveredmethods="2"/>
+      <line num="7" count="1" type="stmt"/>
+      <line num="14" count="2" type="cond" truecount="2" falsecount="0"/>
+      <line num="15" count="1" type="stmt"/>
+      <line num="17" count="1" type="stmt"/>
+      <line num="19" count="1" type="stmt"/>
+      <line num="21" count="1" type="stmt"/>
+      <line num="22" count="1" type="stmt"/>
+      <line num="23" count="2" type="cond" truecount="2" falsecount="0"/>
+      <line num="24" count="2" type="cond" truecount="3" falsecount="1"/>
+      <line num="25" count="2" type="stmt"/>
+      <line num="26" count="2" type="stmt"/>
+    </file>
+  </project>
+</coverage>
