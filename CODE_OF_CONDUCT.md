@@ -59,10 +59,21 @@ representative at an online or offline event.
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement by
-**[opening a GitHub issue](https://github.com/harsh25jai/react-native-crash-screenshot/issues/new)** (describe what happened; you may ask the issue to be locked or limited to collaborators for privacy).
-Maintainers will review reports promptly, investigate fairly, and keep reporter details confidential to the extent practical.
+**Sensitive incidents** (for example harassment, abuse, threats, stalking, or
+disclosure of private information) must be reported **privately** to the
+community leaders responsible for enforcement. Use a **confidential channel**:
+email **[REPLACE_WITH_CONDUCT_EMAIL@example.com](mailto:REPLACE_WITH_CONDUCT_EMAIL@example.com)**
+*(project maintainers: replace this address with a monitored inbox or substitute
+a link to a secure reporting form before publishing widely).*
+
+Maintainers will **triage** reports promptly and investigate fairly. Where a
+report touches public GitHub content, they may **lock** threads or otherwise
+**limit visibility** to protect privacy. Reporter-identifying details will be
+kept **confidential to the extent practical** under the circumstances.
+
+For **non-sensitive** questions about this policy (for example wording or scope
+clarifications), you may **[open a GitHub issue](https://github.com/harsh25jai/react-native-crash-screenshot/issues/new)**
+when a public discussion is appropriate.
 
 All community leaders are obligated to respect the privacy and security of the
 reporter of any incident.
