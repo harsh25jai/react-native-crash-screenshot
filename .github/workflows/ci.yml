@@ -116,6 +116,7 @@ jobs:
           yarn turbo run build:android --cache-dir="${{ env.TURBO_CACHE_DIR }}"
 
   # Objective check: PixelCopy/canvas path writes a JPEG under crash_screenshots/ (API 33 emulator).
+  # Linux runners often hit "adb: device offline" when HW accel is flaky; force software rendering.
   android-instrumented:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -140,12 +141,14 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
 
       - name: Run library instrumented tests (emulator)
-        uses: reactivecircus/android-emulator-runner@v2.34.0
+        uses: reactivecircus/android-emulator-runner@v2.37.0
         with:
           api-level: 33
           target: google_apis
           arch: x86_64
           disable-animations: true
+          disable-linux-hw-accel: true
+          emulator-boot-timeout: 900
           script: |
             cd example/android
             chmod +x gradlew
