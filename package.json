@@ -1,6 +1,6 @@
 {
   "name": "react-native-crash-screenshot",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Capture screenshots on JS and native crashes",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
