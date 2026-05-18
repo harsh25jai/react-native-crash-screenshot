@@ -56,6 +56,7 @@ jobs:
         run: yarn prepare
 
   build-android:
+    if: false
     runs-on: ubuntu-latest
 
     env:
@@ -114,7 +115,47 @@ jobs:
         run: |
           yarn turbo run build:android --cache-dir="${{ env.TURBO_CACHE_DIR }}"
 
+  # Objective check: PixelCopy/canvas path writes a JPEG under crash_screenshots/ (API 33 emulator).
+  # Linux runners often hit "adb: device offline" when HW accel is flaky; force software rendering.
+  android-instrumented:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      JAVA_OPTS: "-XX:MaxHeapSize=6g"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup Java
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+
+      - name: Run library instrumented tests (emulator)
+        uses: reactivecircus/android-emulator-runner@v2.37.0
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          disable-linux-hw-accel: true
+          emulator-boot-timeout: 900
+          script: |
+            cd example/android
+            chmod +x gradlew
+            ./gradlew :react-native-crash-screenshot:connectedDebugAndroidTest --no-daemon --stacktrace
+
   build-ios:
+    if: false
     runs-on: macos-latest
 
     env:

@@ -1,2 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!--
+    App-private dirs (getExternalFilesDir + filesDir) normally need no storage permission (API 19+).
+    WRITE_EXTERNAL_STORAGE is declared for API 23–32 legacy devices / OEMs; the module requests it at
+    runtime on those API levels when an Activity is available. Ignored on API 33+ (scoped storage).
+  -->
+  <uses-permission
+    android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    android:maxSdkVersion="32" />
+
 </manifest>
