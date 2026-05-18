@@ -3,7 +3,9 @@ package com.crashscreenshot
 import android.app.Activity
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
@@ -34,7 +36,7 @@ internal object CrashScreenshotHandler {
 
   @Volatile private var initialized = false
 
-  fun install(application: Application) {
+  fun install(application: Application, initialActivity: Activity? = null) {
     if (initialized) return
     synchronized(this) {
       if (initialized) return
@@ -60,6 +62,8 @@ internal object CrashScreenshotHandler {
               }
             }
           })
+
+      initialActivity?.let { act -> currentActivity = WeakReference(act) }
 
       chainHandler = Thread.getDefaultUncaughtExceptionHandler()
       Thread.setDefaultUncaughtExceptionHandler { thread: Thread, throwable: Throwable ->
@@ -110,44 +114,69 @@ internal object CrashScreenshotHandler {
         latch.countDown()
         return
       }
-      val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-      val rect = Rect(0, 0, view.width, view.height)
-      PixelCopy.request(
-          window,
-          rect,
-          bitmap,
-          { copyResult: Int ->
-            try {
-              if (copyResult == PixelCopy.SUCCESS) {
-                persistBitmap(activity, bitmap, label)
-                Log.i(TAG, "Saved crash screenshot ($label)")
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        val rect = Rect(0, 0, view.width, view.height)
+        PixelCopy.request(
+            window,
+            rect,
+            bitmap,
+            { copyResult: Int ->
+              try {
+                if (copyResult == PixelCopy.SUCCESS) {
+                  persistBitmap(activity, bitmap, label)
+                }
+              } catch (e: Throwable) {
+                Log.e(TAG, "Failed persisting screenshot", e)
+              } finally {
+                if (!bitmap.isRecycled) {
+                  bitmap.recycle()
+                }
+                latch.countDown()
               }
-            } catch (e: Throwable) {
-              Log.e(TAG, "Failed persisting screenshot", e)
-            } finally {
-              if (!bitmap.isRecycled) {
-                bitmap.recycle()
-              }
-              latch.countDown()
-            }
-          },
-          pixelCopyHandler)
+            },
+            pixelCopyHandler)
+      } else {
+        try {
+          val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+          val canvas = Canvas(bitmap)
+          view.draw(canvas)
+          persistBitmap(activity, bitmap, label)
+          bitmap.recycle()
+        } catch (e: Throwable) {
+          Log.e(TAG, "Canvas screenshot failed", e)
+        } finally {
+          latch.countDown()
+        }
+      }
     } catch (e: Throwable) {
-      Log.e(TAG, "PixelCopy request failed", e)
+      Log.e(TAG, "Screenshot capture failed", e)
       latch.countDown()
     }
   }
 
   private fun persistBitmap(activity: Activity, bitmap: Bitmap, label: String) {
-    val baseDir =
-        activity.getExternalFilesDir("crash_screenshots")
-            ?: File(activity.filesDir, "crash_screenshots").also { it.mkdirs() }
-    if (!baseDir.exists()) {
-      baseDir.mkdirs()
-    }
     val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
     val safeLabel = label.replace(Regex("[^a-zA-Z0-9_-]+"), "_").take(80)
-    val file = File(baseDir, "${stamp}_${safeLabel}.jpg")
-    FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out) }
+    val fileName = "${stamp}_${safeLabel}.jpg"
+    val dirs = ArrayList<File>(2)
+    activity.getExternalFilesDir("crash_screenshots")?.let { dirs.add(it) }
+    dirs.add(File(activity.filesDir, "crash_screenshots"))
+
+    var lastError: Throwable? = null
+    for (baseDir in dirs) {
+      try {
+        if (!baseDir.exists() && !baseDir.mkdirs()) {
+          continue
+        }
+        val file = File(baseDir, fileName)
+        FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out) }
+        return
+      } catch (e: Throwable) {
+        lastError = e
+        Log.w(TAG, "Could not persist screenshot under ${baseDir.path}", e)
+      }
+    }
+    Log.e(TAG, "Failed to persist crash screenshot for $label", lastError)
   }
 }

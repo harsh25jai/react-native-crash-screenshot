@@ -1,5 +1,6 @@
 #import "CrashScreenshot.h"
 
+#import <React/RCTBridgeModule.h>
 #import <UIKit/UIKit.h>
 
 #import <CrashScreenshotSpec/CrashScreenshotSpec.h>
@@ -84,7 +85,7 @@ static void RNCSSPersist(UIImage *image, NSString *label) {
   }
   NSString *name = [NSString stringWithFormat:@"%@_%@.jpg", stamp, safe.length > 0 ? safe : @"crash"];
   NSURL *fileURL = [dir URLByAppendingPathComponent:name];
-  [data writeToURL:fileURL atomically:YES];
+  (void)[data writeToURL:fileURL atomically:YES];
 }
 
 static void RNCSSCapture(NSString *label) {
@@ -111,6 +112,7 @@ static void RNCSSCapture(NSString *label) {
 }
 
 static void RNCSSHandleNSException(NSException *exception) {
+  (void)exception;
   RNCSSCapture(@"objc_exception");
   if (gPreviousNSHandler != nullptr) {
     gPreviousNSHandler(exception);
@@ -149,6 +151,14 @@ static void RNCSSInstallOnce(void) {
 
 @implementation CrashScreenshot
 
+// Registers with the legacy bridge + Turbo interop so JS can resolve `CrashScreenshot`
+// (without this, TurboModuleRegistry / autolinking often never sees the implementation).
+RCT_EXPORT_MODULE(CrashScreenshot)
+
++ (BOOL)requiresMainQueueSetup {
+  return YES;
+}
+
 - (void)install {
   RNCSSInstallOnce();
 }
@@ -172,10 +182,6 @@ static void RNCSSInstallOnce(void) {
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
     (const facebook::react::ObjCTurboModule::InitParams &)params {
   return std::make_shared<facebook::react::NativeCrashScreenshotSpecJSI>(params);
-}
-
-+ (NSString *)moduleName {
-  return @"CrashScreenshot";
 }
 
 @end
